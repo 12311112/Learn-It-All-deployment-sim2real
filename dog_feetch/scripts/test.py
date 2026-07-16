@@ -1,64 +1,117 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import argparse
+import time
+import numpy as np
 import os
 import sys
-import time
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from runtime.position_hwi import HWI
 
+# This script is a local hardware test entry point.
+TEST_DELTA_DEG = 8.0
+TEST_DELTA_REL = np.deg2rad(TEST_DELTA_DEG)
+SERIAL_PORT = "/dev/ttyACM0"
+# ===================================================
+
+JOINT_DIRECTION_DESC = {
+    "right_front_hip_joint":   " = ",
+    "right_front_knee_joint":  " = ",
+    "right_front_ankle_joint": " = ",
+    "left_front_hip_joint":    " = ",
+    "left_front_knee_joint":   " = ",
+    "left_front_ankle_joint":  " = ",
+    "right_back_hip_joint":    " = ",
+    "right_back_knee_joint":   " = ",
+    "right_back_ankle_joint":  " = ",
+    "left_back_hip_joint":     " = ",
+    "left_back_knee_joint":    " = ",
+    "left_back_ankle_joint":   " = ",
+}
 
 def main():
-    parser = argparse.ArgumentParser(description="一次性初始化 12 个舵机")
-    parser.add_argument(
-        "--usb-port",
-        default="/dev/ttyUSB0",
-        help="舵机总线串口，例如 /dev/ttyUSB0",
-    )
-    parser.add_argument("--kp", type=float, default=30.0, help="初始化刚度 Kp")
-    parser.add_argument("--kd", type=float, default=0.0, help="初始化阻尼 Kd")
-    parser.add_argument(
-        "--hold-seconds",
-        type=float,
-        default=2.0,
-        help="到达 init_pos 后保持时长（秒）",
-    )
-    parser.add_argument(
-        "--keep-torque",
-        action="store_true",
-        help="初始化后保持使能，不自动断扭矩",
-    )
-    args = parser.parse_args()
+    print("=" * 70)
+    print(" | ")
+    print(f"{TEST_DELTA_DEG} ({np.round(TEST_DELTA_REL, 4)} rad)")
+    print("  Ctrl+C ")
+    print("=" * 70)
 
-    hwi = HWI(usb_port=args.usb_port)
-    n = len(hwi.joints)
-    print(f"已连接: {args.usb_port}")
-    print(f"检测到舵机数量: {n}")
-    if n != 12:
-        print("警告: 当前关节数量不是 12，请确认配置。")
+    # This script is a local hardware test entry point.
+    hwi = HWI(SERIAL_PORT)
+    joint_names = list(hwi.joints.keys())
+    init_pos = hwi.init_pos
+    signs = hwi.real_pose_signs_rl
 
-    # 一次性对全部舵机设置控制参数并执行上电到 init_pos
-    hwi.set_kps([float(args.kp)] * n)
-    hwi.set_kds([float(args.kd)] * n)
-    print(f"设置完成: kp={args.kp}, kd={args.kd}")
+    print(f"\n {len(joint_names)} ")
+    for i, name in enumerate(joint_names):
+        print(f"  [{i:2d}] {name:30s} sign = {signs[name]:.0f}")
 
-    print("开始初始化全部舵机（low_kp -> init_pos -> target_kp）...")
+    # This script is a local hardware test entry point.
+    print("\n...")
     hwi.turn_on()
-    print(f"初始化完成，保持 {args.hold_seconds:.1f} 秒...")
-    time.sleep(max(0.0, args.hold_seconds))
+    print(" \n")
 
-    if args.keep_torque:
-        print("已完成初始化（保持使能）。")
-    else:
-        hwi.turn_off()
-        print("已完成初始化并断扭矩。")
+    try:
+        for idx, joint_name in enumerate(joint_names):
+            input(f"\n>>>  [{idx}] {joint_name}")
 
+            print("-" * 50)
+            print(f"{joint_name}")
+            print(f" sign = {signs[joint_name]}")
+            print(f"{JOINT_DIRECTION_DESC[joint_name]}")
 
+            # This script is a local hardware test entry point.
+            pos_before = hwi.get_present_positions()
+            if pos_before is None:
+                print(" ")
+                break
+            print(f": {np.round(pos_before[idx], 4)} rad ({np.round(np.rad2deg(pos_before[idx]), 2)})")
+
+            # This script is a local hardware test entry point.
+            target_dict = init_pos.copy()
+            target_dict[joint_name] = init_pos[joint_name] + TEST_DELTA_REL * signs[joint_name]
+            hwi.set_position_all(target_dict)
+            time.sleep(0.6)
+
+            # This script is a local hardware test entry point.
+            pos_after = hwi.get_present_positions()
+            if pos_after is None:
+                print(" ")
+                break
+            print(f": {np.round(pos_after[idx], 4)} rad ({np.round(np.rad2deg(pos_after[idx]), 2)})")
+            delta_actual = pos_after[idx] - pos_before[idx]
+            print(f": {np.round(np.rad2deg(delta_actual), 2)} ")
+
+            if abs(delta_actual) < 0.005:
+                print("  ID")
+
+            print(" ")
+            input("")
+
+            # This script is a local hardware test entry point.
+            hwi.set_position_all(init_pos)
+            time.sleep(0.5)
+            print(" ")
+
+        print("\n" + "=" * 70)
+        print(" 12")
+        print(" position_hwi.py  sign ")
+        print("=" * 70)
+
+    except KeyboardInterrupt:
+        print("\n\n  ")
+    finally:
+        print("\n...")
+        try:
+            hwi.turn_off()
+            print(" ")
+        except Exception as e:
+            print(f"{e}")
 
 if __name__ == "__main__":
     main()

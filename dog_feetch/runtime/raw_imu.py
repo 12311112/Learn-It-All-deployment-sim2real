@@ -1,155 +1,113 @@
-import adafruit_bno055
-import board
-import busio
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import numpy as np
 import os
 import pickle
-
 from queue import Queue
 from threading import Thread
 import time
+import platform
 
+# This module reads raw WitMotion IMU data through the vendor protocol library.
+import lib.device_model as deviceModel
+from lib.data_processor.roles.jy901s_dataProcessor import JY901SDataProcessor
+from lib.protocol_resolver.roles.wit_protocol_resolver import WitProtocolResolver
 
-# TODO filter spikes
+# This module reads raw WitMotion IMU data through the vendor protocol library.
+GRAVITY = 9.81           # g  m/s
+DEG2RAD = np.pi / 180    # deg/s  rad/s MuJoCo
+
 class Imu:
     def __init__(
-        self, sampling_freq, user_pitch_bias=0, calibrate=False, upside_down=True
+        self, sampling_freq
     ):
+        """
+        This module reads raw WitMotion IMU data through the vendor protocol library.
+        This module reads raw WitMotion IMU data through the vendor protocol library.
+          - accelero: m/s
+          - gyro: rad/s
+        """
         self.sampling_freq = sampling_freq
-        self.calibrate = calibrate
 
-        i2c = busio.I2C(board.SCL, board.SDA)
-        self.imu = adafruit_bno055.BNO055_I2C(i2c)
-
-        # self.imu.mode = adafruit_bno055.IMUPLUS_MODE
-        # self.imu.mode = adafruit_bno055.ACCGYRO_MODE
-        # self.imu.mode = adafruit_bno055.GYRONLY_MODE
-        self.imu.mode = adafruit_bno055.NDOF_MODE
-        # self.imu.mode = adafruit_bno055.NDOF_FMC_OFF_MODE
-
-        if upside_down:
-            self.imu.axis_remap = (
-                adafruit_bno055.AXIS_REMAP_Y,
-                adafruit_bno055.AXIS_REMAP_X,
-                adafruit_bno055.AXIS_REMAP_Z,
-                adafruit_bno055.AXIS_REMAP_NEGATIVE,
-                adafruit_bno055.AXIS_REMAP_NEGATIVE,
-                adafruit_bno055.AXIS_REMAP_NEGATIVE,
-            )
-
+        # ==========================================
+        # This module reads raw WitMotion IMU data through the vendor protocol library.
+        # ==========================================
+        self._device = deviceModel.DeviceModel(
+            "JY901",
+            WitProtocolResolver(),
+            JY901SDataProcessor(),
+            "51_0"
+        )
+        if platform.system().lower() == 'linux':
+            self._device.serialConfig.portName = "/dev/ttyUSB0"
         else:
-            self.imu.axis_remap = (
-                adafruit_bno055.AXIS_REMAP_X,
-                adafruit_bno055.AXIS_REMAP_Y,
-                adafruit_bno055.AXIS_REMAP_Z,
-                adafruit_bno055.AXIS_REMAP_POSITIVE,
-                adafruit_bno055.AXIS_REMAP_POSITIVE,
-                adafruit_bno055.AXIS_REMAP_POSITIVE,
-            )
+            self._device.serialConfig.portName = "COM17"
+        self._device.serialConfig.baud = 921600
+        self._device.openDevice()
 
-        if self.calibrate:
-            self.imu.mode = adafruit_bno055.NDOF_MODE
-            calibrated = self.imu.calibrated
-            while not calibrated:
-                print("Calibration status: ", self.imu.calibration_status)
-                print("Calibrated : ", self.imu.calibrated)
-                calibrated = self.imu.calibrated
-                time.sleep(0.1)
-            print("CALIBRATION DONE")
-            offsets_accelerometer = self.imu.offsets_accelerometer
-            offsets_gyroscope = self.imu.offsets_gyroscope
-            offsets_magnetometer = self.imu.offsets_magnetometer
-
-            imu_calib_data = {
-                "offsets_accelerometer": offsets_accelerometer,
-                "offsets_gyroscope": offsets_gyroscope,
-                "offsets_magnetometer": offsets_magnetometer,
-            }
-            for k, v in imu_calib_data.items():
-                print(k, v)
-
-            pickle.dump(imu_calib_data, open("imu_calib_data.pkl", "wb"))
-
-            print("Saved", "imu_calib_data.pkl")
-            exit()
-
-        if os.path.exists("imu_calib_data.pkl"):
-            imu_calib_data = pickle.load(open("imu_calib_data.pkl", "rb"))
-            self.imu.mode = adafruit_bno055.CONFIG_MODE
-            time.sleep(0.1)
-            self.imu.offsets_accelerometer = imu_calib_data["offsets_accelerometer"]
-            self.imu.offsets_gyroscope = imu_calib_data["offsets_gyroscope"]
-            self.imu.offsets_magnetometer = imu_calib_data["offsets_magnetometer"]
-            self.imu.mode = adafruit_bno055.NDOF_MODE
-            time.sleep(0.1)
-        else:
-            print("imu_calib_data.pkl not found")
-            print("Imu is running uncalibrated")
-
-        self.x_offset = 0
-
-        # self.tare_x()
-
-        self.last_imu_data = [0, 0, 0, 0]
+        # This module reads raw WitMotion IMU data through the vendor protocol library.
         self.last_imu_data = {
             "gyro": [0, 0, 0],
             "accelero": [0, 0, 0],
         }
+
+        # This module reads raw WitMotion IMU data through the vendor protocol library.
         self.imu_queue = Queue(maxsize=1)
+
+        # This module reads raw WitMotion IMU data through the vendor protocol library.
         Thread(target=self.imu_worker, daemon=True).start()
 
-    def tare_x(self):
-        print("Taring x ...")
-        x_values = []
-        num_values = 100
-        ok = False
-        while not ok:
-            x_values.append(np.array(self.imu.acceleration)[0])
-
-            x_values = x_values[-num_values:]
-
-            if len(x_values) == num_values:
-                mean = np.mean(x_values)
-                std = np.std(x_values)
-                if std < 0.05:
-                    ok = True
-                    self.x_offset = mean
-                    print("Tare x done")
-                else:
-                    print(std)
-
-            time.sleep(0.01)
-
     def imu_worker(self):
+        """This module reads raw WitMotion IMU data through the vendor protocol library."""
         while True:
             s = time.time()
             try:
-                gyro = np.array(self.imu.gyro).copy()
-                accelero = np.array(self.imu.acceleration).copy()
+                # This module reads raw WitMotion IMU data through the vendor protocol library.
+                gyro = (np.array([
+                    self._device.getDeviceData("gyroX"),
+                    self._device.getDeviceData("gyroY"),
+                    self._device.getDeviceData("gyroZ")
+                ]) * DEG2RAD).copy()
+
+                # This module reads raw WitMotion IMU data through the vendor protocol library.
+                accelero = (np.array([
+                    self._device.getDeviceData("accX"),
+                    self._device.getDeviceData("accY"),
+                    self._device.getDeviceData("accZ")
+                ]) * GRAVITY).copy()
             except Exception as e:
                 print("[IMU]:", e)
                 continue
 
+            # This module reads raw WitMotion IMU data through the vendor protocol library.
             if gyro is None or accelero is None:
                 continue
 
+            # This module reads raw WitMotion IMU data through the vendor protocol library.
             if gyro.any() is None or accelero.any() is None:
                 continue
 
-            accelero[0] -= self.x_offset
-
+            # This module reads raw WitMotion IMU data through the vendor protocol library.
             data = {
                 "gyro": gyro,
                 "accelero": accelero,
             }
 
+            # This module reads raw WitMotion IMU data through the vendor protocol library.
             self.imu_queue.put(data)
+
+            # This module reads raw WitMotion IMU data through the vendor protocol library.
             took = time.time() - s
             time.sleep(max(0, 1 / self.sampling_freq - took))
 
     def get_data(self):
+        """
+        This module reads raw WitMotion IMU data through the vendor protocol library.
+        This module reads raw WitMotion IMU data through the vendor protocol library.
+        """
         try:
-            self.last_imu_data = self.imu_queue.get(False)  # non blocking
+            self.last_imu_data = self.imu_queue.get(False)  # False
         except Exception:
             pass
 
@@ -157,11 +115,17 @@ class Imu:
 
 
 if __name__ == "__main__":
-    imu = Imu(50, upside_down=False)
+    # This module reads raw WitMotion IMU data through the vendor protocol library.
+    imu = Imu(50)
     while True:
         data = imu.get_data()
-        # print(data)
-        print("gyro", np.around(data["gyro"], 3))
-        print("accelero", np.around(data["accelero"], 3))
+
+        # This module reads raw WitMotion IMU data through the vendor protocol library.
+        print("gyro (rad/s)", np.around(data["gyro"], 5))
+        print("accelero (m/s)", np.around(data["accelero"], 4))
         print("---")
+
+        # This module reads raw WitMotion IMU data through the vendor protocol library.
         time.sleep(1 / 25)
+
+

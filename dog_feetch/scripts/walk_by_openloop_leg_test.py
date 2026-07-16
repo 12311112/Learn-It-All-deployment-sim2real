@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 """
-Leika simulation(play/controller/gait/kinematics) 同构的真机开环脚本。
+This script tests open-loop gait generation on a limited leg scope.
 
-只保留一个前提：
-- URDF 关节顺序与你的真实电机 ID 对齐
+This script tests open-loop gait generation on a limited leg scope.
+This script tests open-loop gait generation on a limited leg scope.
 """
 
 import argparse
@@ -21,7 +21,7 @@ import numpy as np
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
-    
+
 from runtime.position_hwi import HWI
 
 class GaitType(Enum):
@@ -41,7 +41,7 @@ default_stand_frac = {
 
 
 class KinConfig:
-    # 与 Leika simulation/src/robot/kinematics.py 保持一致
+    # This script tests open-loop gait generation on a limited leg scope.
     coxa = 60.5 / 100.0
     coxa_offset = 10.0 / 100.0
     femur = 111.2 / 100.0
@@ -154,7 +154,7 @@ class GaitController:
             return
 
 
-        period = 2.0  # 秒
+        period = 2.0
         self.phase = (self.phase + dt / period) % 1
 
         #self.phase = (self.phase + dt) % 1
@@ -237,7 +237,7 @@ class Kinematics:
         )
 
 
-# 源 URDF 顺序（FL, FR, RL, RR）
+# This script tests open-loop gait generation on a limited leg scope.
 URDF_JOINT_ORDER = [
     "motor_front_left_shoulder",
     "motor_front_left_leg",
@@ -333,7 +333,7 @@ def setup_gui_sliders():
         p.connect(p.GUI)
 
     sliders = {
-        # 与 Leika simulation/src/utils/gui.py 严格一致
+        # This script tests open-loop gait generation on a limited leg scope.
         "x": p.addUserDebugParameter("x", -1, 1, 0),
         "y": p.addUserDebugParameter("y", 0, 1, 0.5),
         "z": p.addUserDebugParameter("z", -1, 1, 0),
@@ -354,7 +354,7 @@ def setup_gui_sliders():
 
 
 def update_state_from_gui(p, sliders, body_state: BodyState, gait_state: GaitState):
-    # gait_state（与 gui.py::update_gait_state 对齐）
+    # This script tests open-loop gait generation on a limited leg scope.
     gait_state["step_x"] = p.readUserDebugParameter(sliders["step_x"]) * KinConfig.max_step_length
     gait_state["step_z"] = p.readUserDebugParameter(sliders["step_z"]) * KinConfig.max_step_length
     gait_state["step_angle"] = p.readUserDebugParameter(sliders["angle"])
@@ -364,7 +364,7 @@ def update_state_from_gui(p, sliders, body_state: BodyState, gait_state: GaitSta
     gait_state["offset"] = default_offset[GaitType.TROT]
     gait_state["gait_type"] = GaitType.TROT
 
-    # body_state（与 gui.py::update_body_state 对齐）
+    # This script tests open-loop gait generation on a limited leg scope.
     body_state["xm"] = p.readUserDebugParameter(sliders["x"]) * KinConfig.max_body_shift_x
     body_state["ym"] = p.readUserDebugParameter(sliders["y"]) * KinConfig.body_height_range + KinConfig.min_body_height
     body_state["zm"] = p.readUserDebugParameter(sliders["z"]) * KinConfig.max_body_shift_z
@@ -377,15 +377,15 @@ def update_state_from_gui(p, sliders, body_state: BodyState, gait_state: GaitSta
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Leika 同构真机开环控制")
+    parser = argparse.ArgumentParser(description="Leika ")
     parser.add_argument("--usb-port", default="/dev/ttyUSB0")
-    parser.add_argument("--duration", type=float, default=0.0, help="秒，0=持续运行")
+    parser.add_argument("--duration", type=float, default=0.0, help="0=")
     parser.add_argument("--dt", type=float, default=0.02)
     parser.add_argument(
         "--active-leg",
         choices=["all", "left_front", "right_front", "left_back", "right_back"],
         default="right_front",
-        help="只下发指定腿，其余腿锁在 real_pose",
+        help=" real_pose",
     )
     args = parser.parse_args()
 
@@ -427,8 +427,8 @@ def main():
     pb, sliders = setup_gui_sliders()#####don care
 
 
-    joints = ik.inverse_kinematics(body_state)#####逆运动学
-    target_cmd = joints_to_local_cmd(joints)####指令转换诚意正负号
+    joints = ik.inverse_kinematics(body_state)#####
+    target_cmd = joints_to_local_cmd(joints)####
 
 
     start_t = time.time()
@@ -444,7 +444,7 @@ def main():
             update_state_from_gui(pb, sliders, body_state, gait_state)
 
             keys = pb.getKeyboardEvents()
-            
+
             if keys.get(ord("q")) or keys.get(27):
                 print("[INFO] GUI quit key pressed")
                 break

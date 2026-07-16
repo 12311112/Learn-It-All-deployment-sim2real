@@ -1,0 +1,8 @@
+README.txt
+setup.py
+lib/__init__.py
+lib/device_model.py
+witimu.egg-info/PKG-INFO
+witimu.egg-info/SOURCES.txt
+witimu.egg-info/dependency_links.txt
+witimu.egg-info/top_level.txt
